@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.mp3
+*.mp4
+.env
+
+# OAuth tokens — sensitive, never commit
+youtube_token*.json
+
+# Google credentials — sensitive, never commit
+client_secrets.json
+
+# Auth helpers used during setup
+get_auth_url.py
+authorize.py
+authorize_ch2.py
+deploy.py
+
+# Logs and runtime state
+pipeline*.log
+used_topics*.json
+nohup.out

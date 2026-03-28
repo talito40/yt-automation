@@ -10,6 +10,7 @@ Uses Claude API to produce a full video package:
 import json
 import anthropic
 import config
+import prompt_improver
 
 _client = None
 
@@ -71,6 +72,23 @@ def generate_video_package(used_topics: list[str] | None = None) -> dict:
         "holographic, and cinematic visuals. Mix cool tech imagery with relatable human moments."
     ))
 
+    # Load the daily-evolving prompt config
+    pcfg = prompt_improver.load_config()
+
+    evolved_blocks = ""
+    if pcfg.get("current_focus"):
+        evolved_blocks += f"\n═══════════════════════════════════════\nTODAY'S FOCUS\n═══════════════════════════════════════\n{pcfg['current_focus']}\n"
+    if pcfg.get("extra_hook_techniques"):
+        techniques = "\n".join(f"- {t}" for t in pcfg["extra_hook_techniques"])
+        evolved_blocks += f"\nADDITIONAL HOOK TECHNIQUES TO TRY:\n{techniques}\n"
+    if pcfg.get("extra_voice_notes"):
+        evolved_blocks += f"\nADDITIONAL VOICE DIRECTION:\n{pcfg['extra_voice_notes']}\n"
+    if pcfg.get("extra_visual_notes"):
+        evolved_blocks += f"\nADDITIONAL VISUAL DIRECTION:\n{pcfg['extra_visual_notes']}\n"
+    if pcfg.get("forbidden_patterns"):
+        patterns = "\n".join(f"- {p}" for p in pcfg["forbidden_patterns"])
+        evolved_blocks += f"\nFORBIDDEN PATTERNS (do not use these):\n{patterns}\n"
+
     prompt = f"""You are a creative director and YouTube content strategist for "{config.CHANNEL_NAME}".
 The channel niche is STRICTLY: {niche_guidance}
 The audience is US-based adults aged 25-45 who are curious, ambitious, and love content that feels ahead of the curve.
@@ -125,6 +143,7 @@ PRODUCTION SPECS
 - Tags: 15 tags, mix broad and long-tail
 {avoid_block}
 
+{evolved_blocks}
 Before writing the title, silently ask: "Does this make someone stop scrolling?" If no, rewrite it.
 
 Respond ONLY with valid JSON in this exact shape:

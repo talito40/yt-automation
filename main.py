@@ -5,13 +5,11 @@ Usage:
     python main.py --channel 1 --run       # Channel 1 (Smart Money Daily)
     python main.py --channel 2 --run       # Channel 2 (AI Advantage Daily)
     python main.py --channel 1 --rename    # Rename channel 1
-    python main.py --channel 1 --status    # Show cronjob + pipeline status
 """
 
 import argparse
 import json
 import os
-import subprocess
 import sys
 import traceback
 from datetime import date, datetime
@@ -110,53 +108,6 @@ def run_pipeline() -> None:
         _cleanup(video_path)
 
 
-# ── Status ────────────────────────────────────────────────────────────────────
-
-def check_status() -> None:
-    """Print cronjob registration and recent pipeline log entries."""
-    ch = config.CHANNEL
-    log_file = f"pipeline_ch{ch}.log"
-
-    # 1. Cronjob registration
-    print("=== Cronjob Status ===")
-    try:
-        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-        cron_lines = [l for l in result.stdout.splitlines() if "main.py" in l]
-        if cron_lines:
-            print(f"[REGISTERED] {cron_lines[0]}")
-        else:
-            print("[NOT FOUND] No main.py entry in crontab.")
-    except FileNotFoundError:
-        print("[UNAVAILABLE] crontab command not found on this system.")
-
-    # 2. Recent pipeline log
-    print(f"\n=== Pipeline Log (channel {ch}) ===")
-    if not os.path.exists(log_file):
-        print(f"[NO LOG] {log_file} does not exist yet.")
-        return
-
-    with open(log_file) as f:
-        lines = f.readlines()
-
-    tail = lines[-20:] if len(lines) > 20 else lines
-    for line in tail:
-        print(line, end="")
-
-    # 3. Last run result
-    print("\n=== Last Run Result ===")
-    last_success = last_error = None
-    for line in reversed(lines):
-        if "SUCCESS" in line and last_success is None:
-            last_success = line.strip()
-        if "PIPELINE ERROR" in line and last_error is None:
-            last_error = line.strip()
-        if last_success and last_error:
-            break
-
-    print(f"Last success : {last_success or 'none found'}")
-    print(f"Last error   : {last_error   or 'none found'}")
-
-
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -164,14 +115,11 @@ if __name__ == "__main__":
     parser.add_argument("--channel", type=int, default=1, help="Channel number (1 or 2)")
     parser.add_argument("--rename",  action="store_true", help="Rename channel and exit")
     parser.add_argument("--run",     action="store_true", help="Run the daily pipeline")
-    parser.add_argument("--status",  action="store_true", help="Show cronjob and pipeline status")
     args = parser.parse_args()
 
     if args.rename:
         youtube_uploader.rename_channel(config.CHANNEL_NAME)
     elif args.run:
         run_pipeline()
-    elif args.status:
-        check_status()
     else:
         parser.print_help()

@@ -102,15 +102,21 @@ def upload_video(video_path: str, title: str, description: str, tags: list[str])
 
 
 def set_thumbnail(video_id: str, thumbnail_path: str) -> None:
-    """Uploads a custom thumbnail for the given video."""
-    service = _get_authenticated_service()
-    service.thumbnails().set(
-        videoId=video_id,
-        media_body=googleapiclient.http.MediaFileUpload(
-            thumbnail_path, mimetype="image/jpeg"
-        ),
-    ).execute()
-    print(f"[youtube] Thumbnail set for {video_id}")
+    """Uploads a custom thumbnail. Requires verified YouTube channel."""
+    try:
+        service = _get_authenticated_service()
+        service.thumbnails().set(
+            videoId=video_id,
+            media_body=googleapiclient.http.MediaFileUpload(
+                thumbnail_path, mimetype="image/jpeg"
+            ),
+        ).execute()
+        print(f"[youtube] Thumbnail set for {video_id}")
+    except googleapiclient.errors.HttpError as e:
+        if e.resp.status == 403:
+            print(f"[youtube] Thumbnail skipped — channel not verified for custom thumbnails.")
+        else:
+            raise
 
 
 def upload_shorts(video_path: str, title: str, description: str, tags: list[str]) -> str:

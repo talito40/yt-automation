@@ -24,6 +24,9 @@ import content_generator
 import voice_generator
 import video_generator
 import youtube_uploader
+import thumbnail_generator
+import seo_researcher
+import social_poster
 import config
 import prompt_improver
 import notifier
@@ -70,18 +73,33 @@ def _cleanup(*paths: str) -> None:
 
 def run_pipeline() -> None:
     today = date.today().isoformat()
-    video_path = f"video_{today}.mp4"
+    video_path  = f"video_{today}.mp4"
+    shorts_path = f"shorts_{today}.mp4"
+    thumb_path  = f"thumbnail_{today}.jpg"
 
     try:
-        # 1 — Generate content
-        _log("Step 1/3 — Generating script and metadata...")
+        # 1 — SEO research: find best topic
+        _log("Step 1/6 — SEO topic research...")
         used = _load_used_topics()
-        package = content_generator.generate_video_package(used_topics=used)
+        best_topic = seo_researcher.research_best_topic(used)
+        if best_topic:
+            _log(f"  SEO topic: {best_topic}")
+
+        # 2 — Generate content
+        _log("Step 2/6 — Generating script and metadata...")
+        package = content_generator.generate_video_package(
+            used_topics=used,
+            forced_topic=best_topic,
+        )
         _log(f"  Title : {package['title']}")
         _log(f"  Topic : {package['topic']}")
 
-        # 2 — Generate video (Pictory handles voice + footage internally)
-        _log("Step 2/3 — Generating video (Pictory)...")
+        # 3 — Generate thumbnail
+        _log("Step 3/6 — Creating thumbnail...")
+        thumbnail_generator.create_thumbnail(package["title"], thumb_path)
+
+        # 4 — Generate main video
+        _log("Step 4/6 — Generating main video (Pictory)...")
         video_generator.generate_video(
             title=package["title"],
             script=package["script"],
@@ -89,18 +107,35 @@ def run_pipeline() -> None:
             output_path=video_path,
         )
 
-        # 3 — Upload to YouTube
-        _log("Step 3/3 — Uploading to YouTube...")
-        url = youtube_uploader.upload_video(
+        # 5 — Upload main video + set thumbnail
+        _log("Step 5/6 — Uploading main video...")
+        url, video_id = youtube_uploader.upload_video(
             video_path=video_path,
             title=package["title"],
             description=package["description"],
             tags=package["tags"],
         )
-
+        youtube_uploader.set_thumbnail(video_id, thumb_path)
         _save_used_topic(package["topic"])
-        _log(f"SUCCESS — {url}")
+        _log(f"  Main video live → {url}")
+
+        # 6 — Generate + upload Short
+        _log("Step 6/6 — Generating and uploading Short...")
+        shorts_scenes = content_generator.generate_shorts_script(package)
+        video_generator.generate_shorts_video(package["title"], shorts_scenes, shorts_path)
+        shorts_url, _ = youtube_uploader.upload_shorts(
+            video_path=shorts_path,
+            title=package["title"],
+            description=package["description"],
+            tags=package["tags"],
+        )
+        _log(f"  Short live → {shorts_url}")
+
+        # Notify + post to social
         notifier.send_upload_success(config.CHANNEL_NAME, package["title"], url)
+        social_poster.post_to_twitter(package["title"], url, package["tags"])
+
+        _log(f"SUCCESS — {url}")
 
     except Exception as exc:
         _log(f"PIPELINE ERROR: {exc}")
@@ -108,7 +143,7 @@ def run_pipeline() -> None:
         sys.exit(1)
 
     finally:
-        _cleanup(video_path)
+        _cleanup(video_path, shorts_path, thumb_path)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ echo "=== Smart Money Daily — Server Setup ==="
 
 # 1 — System deps
 apt-get update -y
-apt-get install -y python3 python3-pip python3-venv git
+apt-get install -y python3 python3-pip python3-venv git fonts-liberation
 
 # 2 — Project dir
 mkdir -p /opt/yt-automation
@@ -33,6 +33,10 @@ PICTORY_CLIENT_SECRET=your_pictory_client_secret_here
 NOTIFY_EMAIL=your_gmail_address_here
 NOTIFY_APP_PASSWORD=your_gmail_app_password_here
 NOTIFY_TO=lukaki.store@gmail.com
+TWITTER_API_KEY=your_twitter_api_key_here
+TWITTER_API_SECRET=your_twitter_api_secret_here
+TWITTER_ACCESS_TOKEN=your_twitter_access_token_here
+TWITTER_ACCESS_TOKEN_SECRET=your_twitter_access_token_secret_here
 ENV
 
 # 6 — Load env vars on login

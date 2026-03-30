@@ -68,6 +68,40 @@ def _build_storyboard(title: str, script: str, scenes: list[dict] | None = None)
     }
 
 
+def generate_shorts_video(title: str, scenes: list[dict], output_path: str = "output_shorts.mp4") -> str:
+    """Generates a vertical 1080x1920 Short video via Pictory."""
+    headers = _get_headers()
+    pictory_scenes = _build_pictory_scenes(scenes)
+
+    payload = {
+        "videoName": f"{title[:75]} #Shorts",
+        "videoDescription": title,
+        "language": "en",
+        "videoWidth": "1080",
+        "videoHeight": "1920",
+        "scenes": pictory_scenes,
+        "audio": {
+            "aiVoiceOver": {"speaker": config.PICTORY_VOICE},
+            "autoBackgroundMusic": True,
+            "backgroundMusicVolume": 0.1,
+        },
+    }
+
+    resp = requests.post(f"{PICTORY_BASE}/video/storyboard", json=payload, headers=headers, timeout=60)
+    resp.raise_for_status()
+    job_id = resp.json()["jobId"]
+    print(f"[shorts] Storyboard created, jobId={job_id}")
+
+    _wait_for_render_params(job_id, headers)
+    resp = requests.put(f"{PICTORY_BASE}/video/render/{job_id}", headers=headers, timeout=60)
+    resp.raise_for_status()
+    render_job_id = resp.json().get("data", {}).get("job_id", job_id)
+    print(f"[shorts] Render started, jobId={render_job_id}")
+
+    video_url = _poll_until_ready(render_job_id, headers)
+    return _download_video(video_url, output_path)
+
+
 def generate_video(title: str, script: str, scenes: list[dict] | None = None, output_path: str = "output_video.mp4") -> str:
     """
     Creates a video from `scenes` (with keywords) or falls back to splitting `script`.

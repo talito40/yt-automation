@@ -98,7 +98,31 @@ def upload_video(video_path: str, title: str, description: str, tags: list[str])
     video_id = response["id"]
     url = f"https://www.youtube.com/watch?v={video_id}"
     print(f"[youtube] Upload complete → {url}")
-    return url
+    return url, video_id
+
+
+def set_thumbnail(video_id: str, thumbnail_path: str) -> None:
+    """Uploads a custom thumbnail for the given video."""
+    service = _get_authenticated_service()
+    service.thumbnails().set(
+        videoId=video_id,
+        media_body=googleapiclient.http.MediaFileUpload(
+            thumbnail_path, mimetype="image/jpeg"
+        ),
+    ).execute()
+    print(f"[youtube] Thumbnail set for {video_id}")
+
+
+def upload_shorts(video_path: str, title: str, description: str, tags: list[str]) -> str:
+    """Uploads a vertical Short. Appends #Shorts to title and description."""
+    shorts_title = f"{title[:90]} #Shorts"
+    shorts_desc  = f"{description[:200]}\n\n#Shorts"
+    return upload_video(
+        video_path=video_path,
+        title=shorts_title,
+        description=shorts_desc,
+        tags=tags + ["Shorts", "YouTubeShorts"],
+    )
 
 
 def rename_channel(new_name: str) -> None:

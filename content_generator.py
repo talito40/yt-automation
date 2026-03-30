@@ -21,7 +21,7 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
-def generate_video_package(used_topics: list[str] | None = None) -> dict:
+def generate_video_package(used_topics: list[str] | None = None, forced_topic: str | None = None) -> dict:
     """
     Returns a dict with keys:
         title, script, description, tags, topic
@@ -29,7 +29,9 @@ def generate_video_package(used_topics: list[str] | None = None) -> dict:
     used_topics = used_topics or []
     avoid_block = ""
     if used_topics:
-        avoid_block = f"\nAvoid these already-used topics:\n" + "\n".join(f"- {t}" for t in used_topics[-30:])
+        avoid_block = "\nAvoid these already-used topics:\n" + "\n".join(f"- {t}" for t in used_topics[-30:])
+    if forced_topic:
+        avoid_block += f"\n\nFOCUS THIS VIDEO ON: {forced_topic}"
 
     niche_guidance = {
         "personal finance": "personal finance — money saving, investing, tax strategies, budgeting, building wealth",
@@ -188,7 +190,42 @@ Respond ONLY with valid JSON in this exact shape:
     return package
 
 
-if __name__ == "__main__":
+def generate_shorts_script(full_package: dict) -> list[dict]:
+    """
+    Takes the full video package and generates a condensed 45-60 second
+    vertical Short — hook + one key insight + CTA, ~120 words, 5-6 scenes.
+    """
+    client = _get_client()
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=512,
+        messages=[{"role": "user", "content": f"""Condense this YouTube video into a 45-60 second Short.
+
+Original title: {full_package['title']}
+Original topic: {full_package['topic']}
+Original script (first 300 words): {full_package['script'][:300]}
+
+Rules:
+- 5-6 scenes, ~20 words each (~120 words total)
+- Scene 1: Explosive hook — one shocking statement that stops the scroll
+- Scenes 2-4: The single most valuable insight from the full video
+- Scene 5: CTA — "Follow for daily {full_package['topic'].split()[0]} tips"
+- Voice: punchy, fast, energetic — Shorts viewers have zero patience
+- Each scene needs 3 vertical-video-friendly keywords (close-up shots, reactions, text overlays)
+
+Respond ONLY with valid JSON:
+{{"scenes": [{{"text": "...", "keywords": ["...", "...", "..."]}}]}}"""}],
+    )
+
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip()).get("scenes", [])
+
+
+
     pkg = generate_video_package()
     print("TITLE:", pkg["title"])
     print("TOPIC:", pkg["topic"])

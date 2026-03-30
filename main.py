@@ -26,6 +26,7 @@ import video_generator
 import youtube_uploader
 import config
 import prompt_improver
+import notifier
 
 import config as _cfg
 USED_TOPICS_FILE = f"used_topics_ch{_cfg.CHANNEL}.json"
@@ -99,6 +100,7 @@ def run_pipeline() -> None:
 
         _save_used_topic(package["topic"])
         _log(f"SUCCESS — {url}")
+        notifier.send_upload_success(config.CHANNEL_NAME, package["title"], url)
 
     except Exception as exc:
         _log(f"PIPELINE ERROR: {exc}")
@@ -116,7 +118,8 @@ if __name__ == "__main__":
     parser.add_argument("--channel", type=int, default=1, help="Channel number (1 or 2)")
     parser.add_argument("--rename",  action="store_true", help="Rename channel and exit")
     parser.add_argument("--run",     action="store_true", help="Run the daily pipeline")
-    parser.add_argument("--improve", action="store_true", help="Run one prompt improvement iteration")
+    parser.add_argument("--improve",    action="store_true", help="Run one prompt improvement iteration")
+    parser.add_argument("--test-email", action="store_true", help="Send a test notification email")
     args = parser.parse_args()
 
     if args.rename:
@@ -125,5 +128,7 @@ if __name__ == "__main__":
         run_pipeline()
     elif args.improve:
         prompt_improver.improve()
+    elif args.test_email:
+        notifier.send_test(config.CHANNEL_NAME)
     else:
         parser.print_help()

@@ -30,6 +30,9 @@ ELEVENLABS_API_KEY=your_elevenlabs_key_here
 ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 PICTORY_CLIENT_ID=your_pictory_client_id_here
 PICTORY_CLIENT_SECRET=your_pictory_client_secret_here
+NOTIFY_EMAIL=your_gmail_address_here
+NOTIFY_APP_PASSWORD=your_gmail_app_password_here
+NOTIFY_TO=lukaki.store@gmail.com
 ENV
 
 # 6 — Load env vars on login

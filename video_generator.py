@@ -71,14 +71,16 @@ def _build_storyboard(title: str, script: str, scenes: list[dict] | None = None)
 def check_quota() -> dict:
     """
     Fetches current Pictory usage/quota from the API.
-    Returns a dict with usage info and logs a warning if running low.
+    Returns empty dict if endpoint not available on current plan.
     """
     try:
         resp = requests.get(f"{PICTORY_BASE}/user", headers=_get_headers(), timeout=15)
+        if resp.status_code == 403:
+            print(f"[pictory] Quota check not available on current plan — skipping.")
+            return {}
         resp.raise_for_status()
         data = resp.json()
 
-        # Extract quota fields — Pictory returns these under different keys depending on plan
         used  = data.get("videosUsed") or data.get("used") or data.get("rendersUsed") or "?"
         total = data.get("videosAllowed") or data.get("total") or data.get("rendersAllowed") or "?"
 

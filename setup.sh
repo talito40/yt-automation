@@ -44,11 +44,11 @@ echo "set -a; source /opt/yt-automation/.env; set +a" >> /root/.bashrc
 
 # 7 — Cron jobs
 # 12:00 UTC — improve the prompt using yesterday's output (runs before pipeline)
-(crontab -l 2>/dev/null; echo "0 12 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python main.py --channel 1 --improve >> pipeline_ch1.log 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "0 12 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python main.py --channel 2 --improve >> pipeline_ch2.log 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 12 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python3 main.py --channel 1 --improve >> pipeline_ch1.log 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 12 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python3 main.py --channel 2 --improve >> pipeline_ch2.log 2>&1") | crontab -
 # 13:00 UTC — run the daily video pipeline (9 AM Eastern)
-(crontab -l 2>/dev/null; echo "0 13 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python main.py --channel 1 --run >> pipeline_ch1.log 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "0 13 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python main.py --channel 2 --run >> pipeline_ch2.log 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 13 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python3 main.py --channel 1 --run >> pipeline_ch1.log 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 13 * * * cd /opt/yt-automation && source venv/bin/activate && source .env && python3 main.py --channel 2 --run >> pipeline_ch2.log 2>&1") | crontab -
 
 echo ""
 echo "=== Setup complete ==="
@@ -57,7 +57,7 @@ echo "NEXT STEPS:"
 echo "1. Upload client_secrets.json to /opt/yt-automation/"
 echo "2. Edit /opt/yt-automation/.env and fill in your API keys"
 echo "3. Run the one-time OAuth login:  cd /opt/yt-automation && source venv/bin/activate && python youtube_uploader.py"
-echo "4. Rename the channel:            python main.py --rename"
-echo "5. Test the full pipeline:        python main.py --run"
+echo "4. Rename the channel:            python3 main.py --rename"
+echo "5. Test the full pipeline:        python3 main.py --run"
 echo ""
 echo "After step 3, youtube_token.json is saved and the cron job runs fully automated forever."

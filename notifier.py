@@ -8,6 +8,7 @@ Required env vars:
 """
 
 import os
+import time
 import requests
 from datetime import datetime, timezone
 
@@ -22,9 +23,19 @@ def _send(message: str) -> None:
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    resp = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
-    resp.raise_for_status()
-    print(f"[notifier] Telegram message sent.")
+    for attempt in range(1, 4):
+        try:
+            resp = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
+            resp.raise_for_status()
+            print(f"[notifier] Telegram message sent.")
+            return
+        except requests.exceptions.RequestException as e:
+            if attempt == 3:
+                print(f"[notifier] Failed after 3 attempts: {e}")
+                return
+            wait = attempt * 5
+            print(f"[notifier] Attempt {attempt} failed ({e}), retrying in {wait}s...")
+            time.sleep(wait)
 
 
 def send_upload_success(channel_name: str, title: str, url: str) -> None:

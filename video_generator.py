@@ -161,18 +161,19 @@ def generate_video(title: str, script: str, scenes: list[dict] | None = None, ou
     return abs_path
 
 
-def _wait_for_render_params(job_id: str, headers: dict, max_wait: int = 120) -> None:
+def _wait_for_render_params(job_id: str, headers: dict, max_wait: int = 300) -> None:
     """Wait until Pictory finishes processing the storyboard (renderParams appear)."""
     deadline = time.time() + max_wait
     while time.time() < deadline:
         resp = requests.get(f"{PICTORY_BASE}/jobs/{job_id}", headers=headers, timeout=30)
         resp.raise_for_status()
-        data = resp.json().get("data", {})
+        body = resp.json()
+        data = body.get("data", {})
+        print(f"[video] Storyboard status — keys: {list(data.keys())}")
         if data.get("renderParams"):
             print(f"[video] Storyboard ready for render")
             return
-        print(f"[video] Waiting for storyboard processing...")
-        time.sleep(10)
+        time.sleep(15)
     raise TimeoutError("Storyboard render params never appeared")
 
 

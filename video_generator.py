@@ -98,7 +98,7 @@ def check_quota() -> dict:
         return {}
 
 
-
+def generate_shorts_video(title: str, scenes: list[dict], output_path: str = "output_shorts.mp4") -> str:
     """Generates a vertical 1080x1920 Short video via Pictory."""
     headers = _get_headers()
     pictory_scenes = _build_pictory_scenes(scenes)

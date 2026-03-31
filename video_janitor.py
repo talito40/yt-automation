@@ -126,5 +126,9 @@ def run_cleanup() -> dict:
         )
     else:
         print(f"[janitor] No videos to delete. Checked {len(videos)} videos.")
+        notifier._send(
+            f"✅ Janitor ran on {config.CHANNEL_NAME}\n\n"
+            f"No videos deleted — all {len(videos)} videos are either under {MIN_AGE_DAYS} days old or have {MIN_VIEWS}+ views."
+        )
 
     return summary

@@ -30,6 +30,7 @@ import social_poster
 import config
 import prompt_improver
 import notifier
+import video_janitor
 
 import config as _cfg
 USED_TOPICS_FILE = f"used_topics_ch{_cfg.CHANNEL}.json"
@@ -161,7 +162,8 @@ if __name__ == "__main__":
     parser.add_argument("--rename",  action="store_true", help="Rename channel and exit")
     parser.add_argument("--run",     action="store_true", help="Run the daily pipeline")
     parser.add_argument("--improve",    action="store_true", help="Run one prompt improvement iteration")
-    parser.add_argument("--test-email", action="store_true", help="Send a test notification email")
+    parser.add_argument("--test-email", action="store_true", help="Send a test notification")
+    parser.add_argument("--cleanup",    action="store_true", help="Delete videos older than 30 days with <10 views")
     args = parser.parse_args()
 
     if args.rename:
@@ -172,5 +174,7 @@ if __name__ == "__main__":
         prompt_improver.improve()
     elif args.test_email:
         notifier.send_test(config.CHANNEL_NAME)
+    elif args.cleanup:
+        video_janitor.run_cleanup()
     else:
         parser.print_help()

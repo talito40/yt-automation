@@ -1,5 +1,5 @@
 #!/bin/bash
-# Channel 2 daily pipeline — called by cron at 20:00 UTC
+# Channel 2 daily pipeline — called by cron at 15:00 UTC (10am EST)
 cd /opt/yt-automation
 set -a && source .env && set +a
 source venv/bin/activate

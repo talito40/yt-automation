@@ -135,6 +135,13 @@ def run_pipeline() -> None:
         notifier.send_upload_success(config.CHANNEL_NAME, package["title"], url)
         social_poster.post_to_twitter(package["title"], url, package["tags"])
 
+        # Check Pictory quota
+        quota = video_generator.check_quota()
+        if quota.get("remaining") is not None:
+            _log(f"Pictory quota: {quota['used']}/{quota['total']} used ({quota['remaining']} remaining)")
+            if quota["remaining"] <= 2:
+                notifier.send_quota_warning(quota["used"], quota["total"], quota["remaining"])
+
         _log(f"SUCCESS — {url}")
 
     except Exception as exc:

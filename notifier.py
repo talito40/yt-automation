@@ -38,6 +38,15 @@ def send_upload_success(channel_name: str, title: str, url: str) -> None:
     )
 
 
+def send_quota_warning(used: int, total: int, remaining: int) -> None:
+    _send(
+        f"⚠️ Pictory quota low!\n\n"
+        f"Used: {used}/{total}\n"
+        f"Remaining: {remaining} renders\n\n"
+        f"Top up your Pictory plan to avoid pipeline failures."
+    )
+
+
 def send_test(channel_name: str) -> None:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     _send(

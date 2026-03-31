@@ -68,7 +68,37 @@ def _build_storyboard(title: str, script: str, scenes: list[dict] | None = None)
     }
 
 
-def generate_shorts_video(title: str, scenes: list[dict], output_path: str = "output_shorts.mp4") -> str:
+def check_quota() -> dict:
+    """
+    Fetches current Pictory usage/quota from the API.
+    Returns a dict with usage info and logs a warning if running low.
+    """
+    try:
+        resp = requests.get(f"{PICTORY_BASE}/user", headers=_get_headers(), timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Extract quota fields — Pictory returns these under different keys depending on plan
+        used  = data.get("videosUsed") or data.get("used") or data.get("rendersUsed") or "?"
+        total = data.get("videosAllowed") or data.get("total") or data.get("rendersAllowed") or "?"
+
+        print(f"[pictory] Quota: {used}/{total} videos used this period")
+
+        if isinstance(used, int) and isinstance(total, int):
+            remaining = total - used
+            pct = (used / total) * 100
+            if remaining <= 2:
+                print(f"[pictory] WARNING: only {remaining} renders remaining!")
+            return {"used": used, "total": total, "remaining": remaining, "pct_used": pct, "raw": data}
+
+        return {"raw": data}
+
+    except Exception as e:
+        print(f"[pictory] Quota check failed: {e}")
+        return {}
+
+
+
     """Generates a vertical 1080x1920 Short video via Pictory."""
     headers = _get_headers()
     pictory_scenes = _build_pictory_scenes(scenes)

@@ -36,26 +36,28 @@ def delete_all_videos(token_file, channel_label):
     print(f"\n[{channel_label}] Fetching videos...")
     service = _get_service(token_file)
 
+    # Get the uploads playlist ID for this channel
+    ch_response = service.channels().list(part="contentDetails", mine=True).execute()
+    uploads_playlist_id = ch_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
     video_ids = []
     next_page = None
 
     while True:
         params = {
-            "part": "id,snippet",
-            "mine": True,
-            "type": "video",
+            "part": "snippet",
+            "playlistId": uploads_playlist_id,
             "maxResults": 50,
         }
         if next_page:
             params["pageToken"] = next_page
 
-        response = service.search().list(**params).execute()
+        response = service.playlistItems().list(**params).execute()
 
         for item in response.get("items", []):
-            vid_id = item["id"].get("videoId")
+            vid_id = item["snippet"]["resourceId"]["videoId"]
             title = item["snippet"]["title"]
-            if vid_id:
-                video_ids.append((vid_id, title))
+            video_ids.append((vid_id, title))
 
         next_page = response.get("nextPageToken")
         if not next_page:

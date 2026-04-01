@@ -17,6 +17,7 @@ jobs:
           password: ${{ secrets.DROPLET_PASSWORD }}
           script: |
             cd /opt/yt-automation
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             source venv/bin/activate
             pip install -r requirements.txt -q

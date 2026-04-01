@@ -23,13 +23,8 @@ Fully automated YouTube video production system. Runs daily on a schedule to res
 ## How It Works
 
 ```
-12:00 UTC  →  --improve   Research trends + evolve prompt
-13:00 UTC  →  --run       Channel 1 full pipeline
-                          └─> Cleanup (delete low-view videos)
-
-12:00 UTC  →  --improve   Channel 2 prompt improvement
-20:00 UTC  →  --run       Channel 2 full pipeline
-                          └─> Cleanup
+13:00 UTC  →  --improve + --run + --cleanup   Channel 1 full daily cycle
+15:00 UTC  →  --improve + --run + --cleanup   Channel 2 full daily cycle
 ```
 
 Each daily run:
@@ -47,11 +42,10 @@ Each daily run:
 
 ## Daily Schedule
 
-| Time (UTC) | Channel | Action |
-|---|---|---|
-| 12:00 | Both | Prompt improvement (trends research + formula rotation) |
-| 13:00 | 1 — Smart Money Daily | Improve → Run → Cleanup |
-| 20:00 | 2 — AI Advantage Daily | Improve → Run → Cleanup |
+| Time (UTC) | EST | Channel | Action |
+|---|---|---|---|
+| 13:00 | 9:00 AM | 1 — Smart Money Daily | Improve → Run → Cleanup |
+| 15:00 | 10:00 AM | 2 — AI Advantage Daily | Improve → Run → Cleanup |
 
 ---
 
@@ -114,7 +108,7 @@ Each daily run:
 - **Character:** ARIA — sleek AI financial analyst, calm authority, dry wit, insider-secrets voice
 - **Visual theme:** Futuristic finance (holographic charts, glowing data, neon cityscapes)
 - **Voice:** Matthew (Pictory)
-- **Schedule:** 13:00 UTC (9 AM Eastern)
+- **Schedule:** 13:00 UTC (9:00 AM Eastern)
 - **Affiliate links:** Robinhood, M1 Finance, Amazon
 
 ### Channel 2 — AI Advantage Daily
@@ -122,7 +116,7 @@ Each daily run:
 - **Character:** NEXUS — self-aware AI guide, enthusiastic, sarcastic about hype, backstage-tour vibe
 - **Visual theme:** High-tech digital (robot hands, glowing circuits, neon data streams)
 - **Voice:** Joanna (Pictory)
-- **Schedule:** 20:00 UTC (3 PM Eastern)
+- **Schedule:** 15:00 UTC (10:00 AM Eastern)
 - **Affiliate links:** NordVPN, Skillshare, Amazon
 
 ---
@@ -238,7 +232,7 @@ Every script follows scene-level timing rules:
 
 ## Notifications
 
-All sent via Telegram bot.
+All sent via Telegram bot. The notifier retries up to 3 times (5s, 10s backoff) on network errors to survive transient droplet connectivity blips.
 
 | Event | Message |
 |---|---|
@@ -310,6 +304,35 @@ All sent via Telegram bot.
 ├── prompt_config_ch2.json      Evolved prompt config — Channel 2 (generated)
 ├── pipeline_ch1.log            Operation log — Channel 1 (generated)
 └── pipeline_ch2.log            Operation log — Channel 2 (generated)
+```
+
+---
+
+## Server Access
+
+**Server:** DigitalOcean droplet — `165.22.33.167` (Ubuntu, 1 vCPU / 1 GB RAM, NYC3)
+
+### SSH
+```bash
+ssh root@165.22.33.167
+```
+
+### VNC (Remote Desktop)
+TigerVNC with XFCE desktop. The systemd service auto-starts on reboot.
+
+```bash
+# Start / restart VNC
+systemctl start vncserver@1.service
+
+# Connect via VNC viewer
+Host: 165.22.33.167:5901
+```
+
+If VNC fails after a reboot:
+```bash
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+vncserver -kill :1 2>/dev/null
+vncserver :1 -geometry 1280x800 -depth 24 -localhost no
 ```
 
 ---

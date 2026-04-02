@@ -1,0 +1,19 @@
+# Secrets
+.env
+
+# State & logs
+bot_state.json
+logs/*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db

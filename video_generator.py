@@ -1,13 +1,7 @@
 """
 video_generator.py
-Uses the Pictory API to turn a script + voiceover into a rendered MP4.
-
-Flow:
-  1. Authenticate  →  get access token
-  2. POST /video/storyboard  →  get jobId
-  3. POST /video/render      →  start render
-  4. Poll GET /jobs/{jobId}  →  wait for "completed"
-  5. Download the video file
+Uses the Pictory API to turn a script + scenes into a rendered MP4.
+Supports both 16:9 main videos and 9:16 vertical Shorts.
 """
 
 import time
@@ -26,7 +20,6 @@ def _get_headers() -> dict:
 
 
 def _build_pictory_scenes(scenes: list[dict]) -> list[dict]:
-    """Convert content generator scenes into Pictory scene format with keywords."""
     pictory_scenes = []
     for s in scenes:
         scene = {"text": s["text"], "voiceOver": True}
@@ -37,7 +30,6 @@ def _build_pictory_scenes(scenes: list[dict]) -> list[dict]:
 
 
 def _split_into_scenes(script: str, words_per_scene: int = 25) -> list[dict]:
-    """Fallback: split a plain script string into scenes with no keywords."""
     words = script.split()
     return [
         {"text": " ".join(words[i:i + words_per_scene]), "voiceOver": True}
@@ -45,8 +37,13 @@ def _split_into_scenes(script: str, words_per_scene: int = 25) -> list[dict]:
     ]
 
 
-def _build_storyboard(title: str, script: str, scenes: list[dict] | None = None) -> dict:
-    """Pictory storyboard — uses pre-built scenes with keywords if available."""
+def _build_storyboard(
+    title: str,
+    script: str,
+    scenes: list[dict] | None = None,
+    width: str = "1920",
+    height: str = "1080",
+) -> dict:
     if scenes:
         pictory_scenes = _build_pictory_scenes(scenes)
     else:
@@ -56,8 +53,8 @@ def _build_storyboard(title: str, script: str, scenes: list[dict] | None = None)
         "videoName": title[:80],
         "videoDescription": title,
         "language": "en",
-        "videoWidth": "1920",
-        "videoHeight": "1080",
+        "videoWidth": width,
+        "videoHeight": height,
         "scenes": pictory_scenes,
         "audio": {
             "aiVoiceOver": {"speaker": config.PICTORY_VOICE},
@@ -68,46 +65,68 @@ def _build_storyboard(title: str, script: str, scenes: list[dict] | None = None)
     }
 
 
-def generate_video(title: str, script: str, scenes: list[dict] | None = None, output_path: str = "output_video.mp4") -> str:
-    """
-    Creates a video from `scenes` (with keywords) or falls back to splitting `script`.
-    Returns the absolute path to the MP4.
-    """
+def generate_video(
+    title: str,
+    script: str,
+    scenes: list[dict] | None = None,
+    output_path: str = "output_video.mp4",
+) -> str:
+    """Creates a 1920x1080 main video. Returns the absolute path to the MP4."""
+    return _render(title, script, scenes=scenes, output_path=output_path,
+                   width="1920", height="1080")
+
+
+def generate_shorts_video(
+    title: str,
+    script: str,
+    scenes: list[dict] | None = None,
+    output_path: str = "short.mp4",
+) -> str:
+    """Creates a 1080x1920 vertical Short. Returns the absolute path to the MP4."""
+    return _render(title, script, scenes=scenes, output_path=output_path,
+                   width="1080", height="1920")
+
+
+def _render(
+    title: str,
+    script: str,
+    scenes: list[dict] | None,
+    output_path: str,
+    width: str,
+    height: str,
+) -> str:
     headers = _get_headers()
 
-    # Step 1 — create storyboard
-    storyboard_payload = _build_storyboard(title, script, scenes=scenes)
-    resp = requests.post(f"{PICTORY_BASE}/video/storyboard", json=storyboard_payload, headers=headers, timeout=60)
+    storyboard_payload = _build_storyboard(title, script, scenes=scenes,
+                                           width=width, height=height)
+    resp = requests.post(f"{PICTORY_BASE}/video/storyboard",
+                         json=storyboard_payload, headers=headers, timeout=60)
     resp.raise_for_status()
     job_id = resp.json()["jobId"]
-    print(f"[video] Storyboard created, jobId={job_id}")
+    print(f"[video] Storyboard created, jobId={job_id} ({width}x{height})")
 
-    # Step 2 — wait for storyboard render params to be ready, then trigger render
     _wait_for_render_params(job_id, headers)
-    resp = requests.put(f"{PICTORY_BASE}/video/render/{job_id}", headers=headers, timeout=60)
+    resp = requests.put(f"{PICTORY_BASE}/video/render/{job_id}",
+                        headers=headers, timeout=60)
     resp.raise_for_status()
     render_job_id = resp.json().get("data", {}).get("job_id", job_id)
     print(f"[video] Render started, render jobId={render_job_id}")
 
-    # Step 3 — poll until done (max 20 min)
     video_url = _poll_until_ready(render_job_id, headers)
-
-    # Step 4 — download
-    abs_path = _download_video(video_url, output_path)
-    return abs_path
+    return _download_video(video_url, output_path)
 
 
-def _wait_for_render_params(job_id: str, headers: dict, max_wait: int = 120) -> None:
-    """Wait until Pictory finishes processing the storyboard (renderParams appear)."""
+def _wait_for_render_params(job_id: str, headers: dict, max_wait: int = 600) -> None:
     deadline = time.time() + max_wait
     while time.time() < deadline:
-        resp = requests.get(f"{PICTORY_BASE}/jobs/{job_id}", headers=headers, timeout=30)
+        resp = requests.get(f"{PICTORY_BASE}/jobs/{job_id}",
+                            headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json().get("data", {})
         if data.get("renderParams"):
-            print(f"[video] Storyboard ready for render")
+            print("[video] Storyboard ready for render")
             return
-        print(f"[video] Waiting for storyboard processing...")
+        print("[video] Waiting for storyboard processing...")
         time.sleep(10)
     raise TimeoutError("Storyboard render params never appeared")
 
@@ -115,9 +134,10 @@ def _wait_for_render_params(job_id: str, headers: dict, max_wait: int = 120) -> 
 def _poll_until_ready(job_id: str, headers: dict, max_wait: int = 1200) -> str:
     deadline = time.time() + max_wait
     while time.time() < deadline:
-        resp = requests.get(f"{PICTORY_BASE}/jobs/{job_id}", headers=headers, timeout=30)
+        resp = requests.get(f"{PICTORY_BASE}/jobs/{job_id}",
+                            headers=headers, timeout=30)
         resp.raise_for_status()
-        inner = resp.json().get("data", {})
+        inner  = resp.json().get("data", {})
         status = (inner.get("status") or inner.get("renderStatus") or "").lower()
         print(f"[video] Render status: {status}")
 
@@ -139,5 +159,5 @@ def _download_video(url: str, output_path: str) -> str:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
     size_mb = os.path.getsize(abs_path) / (1024 * 1024)
-    print(f"[video] Downloaded → {abs_path} ({size_mb:.1f} MB)")
+    print(f"[video] Downloaded -> {abs_path} ({size_mb:.1f} MB)")
     return abs_path

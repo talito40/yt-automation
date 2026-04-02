@@ -1,14 +1,34 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+venv/
+
+# Media files
 *.mp3
 *.mp4
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Secrets — NEVER commit
 .env
-
-# OAuth tokens — sensitive, never commit
-youtube_token*.json
-
-# Google credentials — sensitive, never commit
 client_secrets.json
+
+# OAuth tokens — sensitive
+youtube_token*.json
+heygen_avatar_ch*.json
+
+# Runtime state & logs
+*.log
+view_counts.json
+playlists_ch*.json
+prompt_config_ch*.json
+used_topics*.json
+nohup.out
+pipeline*.log
+validation_ch*.log
 
 # Auth helpers used during setup
 get_auth_url.py
@@ -16,7 +36,6 @@ authorize.py
 authorize_ch2.py
 deploy.py
 
-# Logs and runtime state
-pipeline*.log
-used_topics*.json
-nohup.out
+# Local deploy scripts (not needed on server)
+deploy_*.py
+server_*.py

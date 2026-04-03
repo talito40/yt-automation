@@ -58,7 +58,8 @@ def _cleanup(*paths):
             pass
 
 
-def _notify_telegram(msg):
+def _notify(msg):
+    """Send a Telegram message immediately."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat  = os.environ.get("TELEGRAM_CHAT_ID", "")
     if not token or not chat:
@@ -78,24 +79,24 @@ def _upload_short(service, video_package, main_url, angle, suffix):
     short_path = f"short_{today}_{suffix}.mp4"
     try:
         shorts_pkg = content_generator.generate_shorts_script(video_package, angle=angle)
-        shorts_pkg["description"] = shorts_pkg["description"].replace("[MAIN_VIDEO_URL]", main_url)
+        shorts_pkg["description"] = shorts_pkg.get("description", "").replace("[MAIN_VIDEO_URL]", main_url)
         video_generator.generate_shorts_video(
             title=shorts_pkg["title"],
             script=shorts_pkg["script"],
             scenes=shorts_pkg.get("scenes"),
             output_path=short_path,
         )
-        short_url, _ = youtube_uploader.upload_short(
+        short_url, short_id = youtube_uploader.upload_short(
             video_path=short_path,
             title=shorts_pkg["title"],
-            description=shorts_pkg["description"],
+            description=shorts_pkg.get("description", ""),
             tags=shorts_pkg.get("tags", []),
             service=service,
         )
-        return short_url
+        return short_url, shorts_pkg["title"]
     except Exception as exc:
         _log(f"  Short ({angle}) failed (non-fatal): {exc}")
-        return None
+        return None, None
     finally:
         _cleanup(short_path)
 
@@ -106,7 +107,6 @@ def run_pipeline():
     video_path = f"video_{today}.mp4"
     intro_path = f"intro_{today}.mp4"
     thumb_path = f"thumb_{today}.jpg"
-    short_urls = []
 
     try:
         # 1 -- SEO topic research
@@ -173,6 +173,14 @@ def run_pipeline():
         if playlist_name:
             youtube_uploader.add_to_playlist(service, video_id, playlist_name)
 
+        # Notify immediately when main video is live
+        avatar_line = " | Avatar: ON" if intro else ""
+        _notify(
+            f"\U0001f4f9 <b>{config.CHANNEL_NAME}</b> — New video live!\n"
+            f"\U0001f3ac <a href=\"{url}\">{package['title']}</a>{avatar_line}\n"
+            f"\U0001f4cb Playlist: {playlist_name or 'None'}"
+        )
+
         # 5b -- Post channel comment with links to related videos
         _log("  Posting channel comment with related video links...")
         recent = youtube_uploader.get_recent_videos(service, exclude_id=video_id, max_results=3)
@@ -187,28 +195,23 @@ def run_pipeline():
         # 6 -- 2 Shorts
         _log("Step 6/6 -- Generating and uploading Shorts (2 angles)...")
         for angle, suffix in [("stat", "a"), ("mistake", "b")]:
-            short_url = _upload_short(service, package, url, angle, suffix)
+            short_url, short_title = _upload_short(service, package, url, angle, suffix)
             if short_url:
                 _log(f"  Short ({angle}) live -> {short_url}")
-                short_urls.append(short_url)
+                # Notify immediately for each Short
+                _notify(
+                    f"\U0001f3a6 <b>{config.CHANNEL_NAME}</b> — New Short live!\n"
+                    f"\u26a1 <a href=\"{short_url}\">{short_title}</a>\n"
+                    f"\U0001f517 Main video: <a href=\"{url}\">Watch</a>"
+                )
 
         _log(f"SUCCESS -- {url}")
-
-        shorts_text = ""
-        for i, su in enumerate(short_urls, 1):
-            shorts_text += f"\n🎥 Short {i}: <a href=\"{su}\">Watch</a>"
-        avatar_line = "\n🤖 Avatar intro: ON" if intro else "\n🤖 Avatar intro: OFF"
-        _notify_telegram(
-            f"✅ <b>{config.CHANNEL_NAME}</b>\n"
-            f"📹 <a href=\"{url}\">{package['title']}</a>"
-            + avatar_line + shorts_text
-        )
 
     except Exception as exc:
         _log(f"PIPELINE ERROR: {exc}")
         traceback.print_exc()
-        _notify_telegram(
-            f"❌ <b>{config.CHANNEL_NAME}</b> pipeline failed\n"
+        _notify(
+            f"\u274c <b>{config.CHANNEL_NAME}</b> pipeline failed\n"
             f"Error: {exc}"
         )
         sys.exit(1)

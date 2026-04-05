@@ -1,5 +1,7 @@
 """
 main.py -- YouTube Automation  |  Daily pipeline orchestrator
+HeyGen is the PRIMARY video source (full presenter video).
+Pictory is fallback only if HeyGen fails.
 """
 
 import argparse
@@ -20,7 +22,6 @@ import video_generator
 import youtube_uploader
 import thumb_generator
 import avatar_generator
-import video_stitcher
 import config
 
 USED_TOPICS_FILE = f"used_topics_ch{config.CHANNEL}.json"
@@ -74,11 +75,12 @@ def _notify(msg):
         pass
 
 
-def _upload_short(service, video_package, main_url, angle, suffix):
+def _upload_short(service, package, main_url, angle, suffix):
     today      = date.today().isoformat()
     short_path = f"short_{today}_{suffix}.mp4"
     try:
-        shorts_pkg = content_generator.generate_shorts_script(video_package["topic"] if isinstance(video_package, dict) else str(video_package), config.NICHE, angle=angle)
+        topic = package.get("topic", package.get("title", config.NICHE))
+        shorts_pkg = content_generator.generate_shorts_script(topic, config.NICHE, angle=angle)
         shorts_pkg["description"] = shorts_pkg.get("description", "").replace("[MAIN_VIDEO_URL]", main_url)
         video_generator.generate_shorts_video(
             title=shorts_pkg["title"],
@@ -102,71 +104,73 @@ def _upload_short(service, video_package, main_url, angle, suffix):
 
 
 def run_pipeline():
-    today      = date.today().isoformat()
-    raw_path   = f"video_raw_{today}.mp4"
-    video_path = f"video_{today}.mp4"
-    intro_path = f"intro_{today}.mp4"
-    thumb_path = f"thumb_{today}.jpg"
+    today       = date.today().isoformat()
+    heygen_path = f"video_heygen_{today}.mp4"   # HeyGen full presenter video
+    pictory_path = f"video_pictory_{today}.mp4"  # Pictory fallback
+    video_path  = f"video_{today}.mp4"           # final video path
+    thumb_path  = f"thumb_{today}.jpg"
+
+    used_heygen  = False
+    service      = None
 
     try:
-        # 1 -- SEO topic research
-        _log("Step 1/6 -- SEO topic research...")
+        # ── Step 1: SEO topic research ─────────────────────────────────────────
+        _log("Step 1/5 -- SEO topic research...")
         used     = _load_used_topics()
         keywords = content_generator.get_trending_keywords(config.NICHE)
         seo_data = content_generator.research_seo_topic(config.NICHE, keywords)
         topic    = seo_data.get("topic", config.NICHE)
         _log(f"  SEO topic: {topic}")
 
-        # 2 -- Generate script and metadata
-        _log("Step 2/6 -- Generating script and metadata...")
+        # ── Step 2: Generate script and metadata ───────────────────────────────
+        _log("Step 2/5 -- Generating script and metadata...")
         package = content_generator.generate_video_package(topic, config.NICHE)
-        # Ensure 'topic' key exists (new content_generator uses 'title' only)
-        if 'topic' not in package:
-            package['topic'] = topic
-        # Ensure 'script' key exists (may come as 'scenes' only)
-        if 'script' not in package:
-            scenes = package.get('scenes', [])
-            package['script'] = ' '.join(s.get('narration','') for s in scenes) if scenes else topic
+        if "topic" not in package:
+            package["topic"] = topic
+        if "script" not in package:
+            scenes = package.get("scenes", [])
+            package["script"] = " ".join(
+                s.get("narration", "") for s in scenes
+            ).strip() if scenes else topic
         _log(f"  Title    : {package['title']}")
         _log(f"  Topic    : {package['topic']}")
         _log(f"  Playlist : {package.get('playlist', 'n/a')}")
 
-        # 3 -- Create thumbnail
-        _log("Step 3/6 -- Creating thumbnail...")
+        # ── Step 3: Create thumbnail ───────────────────────────────────────────
+        _log("Step 3/5 -- Creating thumbnail...")
         thumb_generator.generate_thumbnail(package["title"], thumb_path)
 
-        # 4 -- Generate main video (Pictory)
-        _log("Step 4/6 -- Generating main video (Pictory)...")
-        video_generator.generate_video(
-            title=package["title"],
-            script=package["script"],
-            scenes=package.get("scenes"),
-            output_path=raw_path,
-        )
-
-        # 4b -- Avatar intro (HeyGen)
-        _log("Step 4b/6 -- Generating avatar intro (HeyGen)...")
-        intro = avatar_generator.generate_intro_clip(
+        # ── Step 4: Generate video ─────────────────────────────────────────────
+        # PRIMARY: HeyGen full presenter video
+        _log("Step 4/5 -- Generating presenter video (HeyGen)...")
+        heygen_result = avatar_generator.generate_intro_clip(
             video_title=package["title"],
-            photo_path=config.PRESENTER_PHOTO,
-            output_path=intro_path,
+            script=package.get("script", ""),
+            scenes=package.get("scenes", []),
+            output_path=heygen_path,
         )
 
-        # 4c -- Stitch
-        if intro:
-            _log("Step 4c/6 -- Stitching intro onto main video...")
-            try:
-                video_stitcher.splice_intro(intro_path, raw_path, video_path)
-                _log("  Intro stitched successfully")
-            except Exception as e:
-                _log(f"  Stitch failed (non-fatal): {e}")
-                os.rename(raw_path, video_path)
+        if heygen_result:
+            _log("  HeyGen SUCCESS -- presenter video ready")
+            video_path = heygen_path
+            used_heygen = True
         else:
-            _log("  No intro -- using raw Pictory video")
-            os.rename(raw_path, video_path)
+            # FALLBACK: Pictory
+            _log("  HeyGen failed -- falling back to Pictory...")
+            video_generator.generate_video(
+                title=package["title"],
+                script=package["script"],
+                scenes=package.get("scenes"),
+                output_path=pictory_path,
+            )
+            if os.path.exists(pictory_path):
+                video_path = pictory_path
+                _log("  Pictory fallback video ready")
+            else:
+                raise RuntimeError("Both HeyGen and Pictory failed to produce a video")
 
-        # 5 -- Upload main video + thumbnail + playlist
-        _log("Step 5/6 -- Uploading main video...")
+        # ── Step 5: Upload ─────────────────────────────────────────────────────
+        _log("Step 5/5 -- Uploading main video...")
         service = youtube_uploader._get_authenticated_service()
         url, video_id = youtube_uploader.upload_video(
             video_path=video_path,
@@ -183,35 +187,41 @@ def run_pipeline():
             youtube_uploader.add_to_playlist(service, video_id, playlist_name)
 
         # Notify immediately when main video is live
-        avatar_line = " | Avatar: ON" if intro else ""
+        source_tag = "HeyGen presenter" if used_heygen else "Pictory (fallback)"
         _notify(
-            f"\U0001f4f9 <b>{config.CHANNEL_NAME}</b> — New video live!\n"
-            f"\U0001f3ac <a href=\"{url}\">{package['title']}</a>{avatar_line}\n"
+            f"\U0001f4f9 <b>{config.CHANNEL_NAME}</b> \u2014 New video live!\n"
+            f"\U0001f3ac <a href=\"{url}\">{package['title']}</a>\n"
+            f"\U0001f916 Source: {source_tag}\n"
             f"\U0001f4cb Playlist: {playlist_name or 'None'}"
         )
 
-        # 5b -- Post channel comment with links to related videos
+        # Post channel comment with links to related videos
         _log("  Posting channel comment with related video links...")
-        recent = youtube_uploader.get_recent_videos(service, exclude_id=video_id, max_results=3)
-        youtube_uploader.post_channel_comment(service, video_id, recent)
+        try:
+            recent = youtube_uploader.get_recent_videos(service, exclude_id=video_id, max_results=3)
+            youtube_uploader.post_channel_comment(service, video_id, recent)
+        except Exception as e:
+            _log(f"  Comment failed (non-fatal): {e}")
 
-        # 5c -- Update older video descriptions with link to this new video
+        # Update older video descriptions with link to this new video
         _log("  Updating older video descriptions with link to new video...")
-        youtube_uploader.update_older_descriptions(service, package["title"], url, max_videos=3)
+        try:
+            youtube_uploader.update_older_descriptions(service, package["title"], url, max_videos=3)
+        except Exception as e:
+            _log(f"  Description update failed (non-fatal): {e}")
 
         _save_used_topic(package["topic"])
 
-        # 6 -- 2 Shorts
-        _log("Step 6/6 -- Generating and uploading Shorts (2 angles)...")
+        # ── Shorts ─────────────────────────────────────────────────────────────
+        _log("Generating and uploading Shorts (2 angles)...")
         for angle, suffix in [("stat", "a"), ("mistake", "b")]:
             short_url, short_title = _upload_short(service, package, url, angle, suffix)
             if short_url:
                 _log(f"  Short ({angle}) live -> {short_url}")
-                # Notify immediately for each Short
                 _notify(
-                    f"\U0001f3a6 <b>{config.CHANNEL_NAME}</b> — New Short live!\n"
-                    f"\u26a1 <a href=\"{short_url}\">{short_title}</a>\n"
-                    f"\U0001f517 Main video: <a href=\"{url}\">Watch</a>"
+                    f"\u26a1 <b>{config.CHANNEL_NAME}</b> \u2014 New Short live!\n"
+                    f"<a href=\"{short_url}\">{short_title}</a>\n"
+                    f"\U0001f517 Main: <a href=\"{url}\">Watch</a>"
                 )
 
         _log(f"SUCCESS -- {url}")
@@ -226,7 +236,7 @@ def run_pipeline():
         sys.exit(1)
 
     finally:
-        _cleanup(raw_path, video_path, intro_path, thumb_path)
+        _cleanup(heygen_path, pictory_path, video_path, thumb_path)
 
 
 if __name__ == "__main__":

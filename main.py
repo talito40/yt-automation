@@ -78,7 +78,7 @@ def _upload_short(service, video_package, main_url, angle, suffix):
     today      = date.today().isoformat()
     short_path = f"short_{today}_{suffix}.mp4"
     try:
-        shorts_pkg = content_generator.generate_shorts_script(video_package, angle=angle)
+        shorts_pkg = content_generator.generate_shorts_script(video_package["topic"] if isinstance(video_package, dict) else str(video_package), config.NICHE, angle=angle)
         shorts_pkg["description"] = shorts_pkg.get("description", "").replace("[MAIN_VIDEO_URL]", main_url)
         video_generator.generate_shorts_video(
             title=shorts_pkg["title"],
@@ -111,13 +111,22 @@ def run_pipeline():
     try:
         # 1 -- SEO topic research
         _log("Step 1/6 -- SEO topic research...")
-        used  = _load_used_topics()
-        topic = content_generator.research_seo_topic(used_topics=used)
+        used     = _load_used_topics()
+        keywords = content_generator.get_trending_keywords(config.NICHE)
+        seo_data = content_generator.research_seo_topic(config.NICHE, keywords)
+        topic    = seo_data.get("topic", config.NICHE)
         _log(f"  SEO topic: {topic}")
 
         # 2 -- Generate script and metadata
         _log("Step 2/6 -- Generating script and metadata...")
-        package = content_generator.generate_video_package(used_topics=used, seo_topic=topic)
+        package = content_generator.generate_video_package(topic, config.NICHE)
+        # Ensure 'topic' key exists (new content_generator uses 'title' only)
+        if 'topic' not in package:
+            package['topic'] = topic
+        # Ensure 'script' key exists (may come as 'scenes' only)
+        if 'script' not in package:
+            scenes = package.get('scenes', [])
+            package['script'] = ' '.join(s.get('narration','') for s in scenes) if scenes else topic
         _log(f"  Title    : {package['title']}")
         _log(f"  Topic    : {package['topic']}")
         _log(f"  Playlist : {package.get('playlist', 'n/a')}")

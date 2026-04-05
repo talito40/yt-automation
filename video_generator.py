@@ -22,7 +22,7 @@ def _get_headers() -> dict:
 def _build_pictory_scenes(scenes: list[dict]) -> list[dict]:
     pictory_scenes = []
     for s in scenes:
-        scene = {"text": s["text"], "voiceOver": True}
+        scene = {"text": s.get("text") or s.get("narration", ""), "voiceOver": True}
         if s.get("keywords"):
             scene["keywords"] = s["keywords"]
         pictory_scenes.append(scene)

@@ -17,10 +17,10 @@ _HEYGEN_AVATARS = {
 HEYGEN_AVATAR_ID = _HEYGEN_AVATARS.get(CHANNEL, "Albert_public_1")
 
 _HEYGEN_VOICES = {
-    1: "en-US-GuyNeural",
-    2: "en-US-AriaNeural",
+    1: "8a8fb6db01a44463a087e68f54d0870b-f4ffc86b-6040-428f-b71f-d1244273c488",  # James
+    2: "16a09e4706f74997ba4ed05ea11470f6",  # Cassidy
 }
-HEYGEN_VOICE_ID = _HEYGEN_VOICES.get(CHANNEL, "en-US-GuyNeural")
+HEYGEN_VOICE_ID = _HEYGEN_VOICES.get(CHANNEL, "8a8fb6db01a44463a087e68f54d0870b-f4ffc86b-6040-428f-b71f-d1244273c488")
 
 _HEYGEN_BG = {
     1: "#0c1c48",

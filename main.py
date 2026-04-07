@@ -20,6 +20,7 @@ import content_generator
 import youtube_uploader
 import thumb_generator
 import avatar_generator
+import leonardo_fallback
 import config
 
 USED_TOPICS_FILE = f"used_topics_ch{config.CHANNEL}.json"
@@ -154,7 +155,7 @@ def run_pipeline():
         _log("Step 3/5 -- Creating thumbnail...")
         thumb_generator.generate_thumbnail(package["title"], thumb_path)
 
-        # ── Step 4: Generate main video via HeyGen ─────────────────────────────
+        # ── Step 4: Generate main video (HeyGen primary, Leonardo fallback) ──────
         _log("Step 4/5 -- Generating presenter video (HeyGen)...")
         result = _generate_heygen(
             title=package["title"],
@@ -162,8 +163,20 @@ def run_pipeline():
             scenes=package.get("scenes", []),
             output_path=video_path,
         )
-        if not result:
-            raise RuntimeError("HeyGen failed to generate main video")
+        if result:
+            _log(f"  HeyGen SUCCESS — presenter video ready")
+        else:
+            _log("  HeyGen failed — trying Leonardo slideshow fallback...")
+            result = leonardo_fallback.generate_fallback_video(
+                title=package["title"],
+                script=package.get("script", ""),
+                scenes=package.get("scenes", []),
+                output_path=video_path,
+            )
+            if result:
+                _log("  Leonardo fallback video ready")
+            else:
+                raise RuntimeError("Both HeyGen and Leonardo fallback failed")
 
         _log(f"  Presenter video ready ({os.path.getsize(video_path)//1024//1024} MB)")
 
@@ -184,10 +197,12 @@ def run_pipeline():
         if playlist_name:
             youtube_uploader.add_to_playlist(service, video_id, playlist_name)
 
+        is_heygen = os.path.exists(video_path) and result == video_path
+        source_tag = f"HeyGen ({config.HEYGEN_AVATAR_ID})" if avatar_generator.HEYGEN_API_KEY else "Leonardo slideshow"
         _notify(
             f"\U0001f4f9 <b>{config.CHANNEL_NAME}</b> \u2014 New video live!\n"
             f"\U0001f3ac <a href=\"{url}\">{package['title']}</a>\n"
-            f"\U0001f916 Presenter: {config.HEYGEN_AVATAR_ID}\n"
+            f"\U0001f916 Source: {source_tag}\n"
             f"\U0001f4cb Playlist: {playlist_name or 'None'}"
         )
 

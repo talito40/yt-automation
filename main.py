@@ -1,7 +1,6 @@
 """
 main.py -- YouTube Automation  |  Daily pipeline orchestrator
-HeyGen is the PRIMARY video source (full presenter video).
-Pictory is fallback only if HeyGen fails.
+HeyGen generates ALL videos (main + Shorts). Pictory removed entirely.
 """
 
 import argparse
@@ -18,7 +17,6 @@ _pre_args, _ = _pre.parse_known_args()
 os.environ["CHANNEL"] = str(_pre_args.channel)
 
 import content_generator
-import video_generator
 import youtube_uploader
 import thumb_generator
 import avatar_generator
@@ -31,7 +29,7 @@ LOG_FILE         = f"pipeline_ch{config.CHANNEL}.log"
 def _log(msg):
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     line = f"[{timestamp}] {msg}"
-    print(line)
+    print(line, flush=True)
     with open(LOG_FILE, "a") as f:
         f.write(line + "\n")
 
@@ -60,7 +58,6 @@ def _cleanup(*paths):
 
 
 def _notify(msg):
-    """Send a Telegram message immediately."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat  = os.environ.get("TELEGRAM_CHAT_ID", "")
     if not token or not chat:
@@ -75,6 +72,19 @@ def _notify(msg):
         pass
 
 
+def _generate_heygen(title, script, scenes, output_path):
+    """Generate a video via HeyGen. Returns path on success, '' on failure."""
+    full_script = script
+    if not full_script and scenes:
+        full_script = " ".join(s.get("narration", "") for s in scenes).strip()
+    return avatar_generator.generate_intro_clip(
+        video_title=title,
+        script=full_script,
+        scenes=scenes,
+        output_path=output_path,
+    )
+
+
 def _upload_short(service, package, main_url, angle, suffix):
     today      = date.today().isoformat()
     short_path = f"short_{today}_{suffix}.mp4"
@@ -82,12 +92,18 @@ def _upload_short(service, package, main_url, angle, suffix):
         topic = package.get("topic", package.get("title", config.NICHE))
         shorts_pkg = content_generator.generate_shorts_script(topic, config.NICHE, angle=angle)
         shorts_pkg["description"] = shorts_pkg.get("description", "").replace("[MAIN_VIDEO_URL]", main_url)
-        video_generator.generate_shorts_video(
+
+        _log(f"  Generating Short ({angle}) via HeyGen...")
+        result = _generate_heygen(
             title=shorts_pkg["title"],
-            script=shorts_pkg["script"],
-            scenes=shorts_pkg.get("scenes"),
+            script=shorts_pkg.get("script", ""),
+            scenes=[],
             output_path=short_path,
         )
+        if not result:
+            _log(f"  Short ({angle}) HeyGen failed — skipping")
+            return None, None
+
         short_url, short_id = youtube_uploader.upload_short(
             video_path=short_path,
             title=shorts_pkg["title"],
@@ -104,19 +120,13 @@ def _upload_short(service, package, main_url, angle, suffix):
 
 
 def run_pipeline():
-    today       = date.today().isoformat()
-    heygen_path = f"video_heygen_{today}.mp4"   # HeyGen full presenter video
-    pictory_path = f"video_pictory_{today}.mp4"  # Pictory fallback
-    video_path  = f"video_{today}.mp4"           # final video path
-    thumb_path  = f"thumb_{today}.jpg"
-
-    used_heygen  = False
-    service      = None
+    today      = date.today().isoformat()
+    video_path = f"video_{today}.mp4"
+    thumb_path = f"thumb_{today}.jpg"
 
     try:
         # ── Step 1: SEO topic research ─────────────────────────────────────────
         _log("Step 1/5 -- SEO topic research...")
-        used     = _load_used_topics()
         keywords = content_generator.get_trending_keywords(config.NICHE)
         seo_data = content_generator.research_seo_topic(config.NICHE, keywords)
         topic    = seo_data.get("topic", config.NICHE)
@@ -132,42 +142,30 @@ def run_pipeline():
             package["script"] = " ".join(
                 s.get("narration", "") for s in scenes
             ).strip() if scenes else topic
+
+        script_len = len(package["script"])
         _log(f"  Title    : {package['title']}")
         _log(f"  Topic    : {package['topic']}")
+        _log(f"  Script   : {script_len} chars")
         _log(f"  Playlist : {package.get('playlist', 'n/a')}")
+        _log(f"  Avatar   : {config.HEYGEN_AVATAR_ID}")
 
         # ── Step 3: Create thumbnail ───────────────────────────────────────────
         _log("Step 3/5 -- Creating thumbnail...")
         thumb_generator.generate_thumbnail(package["title"], thumb_path)
 
-        # ── Step 4: Generate video ─────────────────────────────────────────────
-        # PRIMARY: HeyGen full presenter video
+        # ── Step 4: Generate main video via HeyGen ─────────────────────────────
         _log("Step 4/5 -- Generating presenter video (HeyGen)...")
-        heygen_result = avatar_generator.generate_intro_clip(
-            video_title=package["title"],
+        result = _generate_heygen(
+            title=package["title"],
             script=package.get("script", ""),
             scenes=package.get("scenes", []),
-            output_path=heygen_path,
+            output_path=video_path,
         )
+        if not result:
+            raise RuntimeError("HeyGen failed to generate main video")
 
-        if heygen_result:
-            _log("  HeyGen SUCCESS -- presenter video ready")
-            video_path = heygen_path
-            used_heygen = True
-        else:
-            # FALLBACK: Pictory
-            _log("  HeyGen failed -- falling back to Pictory...")
-            video_generator.generate_video(
-                title=package["title"],
-                script=package["script"],
-                scenes=package.get("scenes"),
-                output_path=pictory_path,
-            )
-            if os.path.exists(pictory_path):
-                video_path = pictory_path
-                _log("  Pictory fallback video ready")
-            else:
-                raise RuntimeError("Both HeyGen and Pictory failed to produce a video")
+        _log(f"  Presenter video ready ({os.path.getsize(video_path)//1024//1024} MB)")
 
         # ── Step 5: Upload ─────────────────────────────────────────────────────
         _log("Step 5/5 -- Uploading main video...")
@@ -186,25 +184,19 @@ def run_pipeline():
         if playlist_name:
             youtube_uploader.add_to_playlist(service, video_id, playlist_name)
 
-        # Notify immediately when main video is live
-        source_tag = "HeyGen presenter" if used_heygen else "Pictory (fallback)"
         _notify(
             f"\U0001f4f9 <b>{config.CHANNEL_NAME}</b> \u2014 New video live!\n"
             f"\U0001f3ac <a href=\"{url}\">{package['title']}</a>\n"
-            f"\U0001f916 Source: {source_tag}\n"
+            f"\U0001f916 Presenter: {config.HEYGEN_AVATAR_ID}\n"
             f"\U0001f4cb Playlist: {playlist_name or 'None'}"
         )
 
-        # Post channel comment with links to related videos
-        _log("  Posting channel comment with related video links...")
         try:
             recent = youtube_uploader.get_recent_videos(service, exclude_id=video_id, max_results=3)
             youtube_uploader.post_channel_comment(service, video_id, recent)
         except Exception as e:
             _log(f"  Comment failed (non-fatal): {e}")
 
-        # Update older video descriptions with link to this new video
-        _log("  Updating older video descriptions with link to new video...")
         try:
             youtube_uploader.update_older_descriptions(service, package["title"], url, max_videos=3)
         except Exception as e:
@@ -213,7 +205,7 @@ def run_pipeline():
         _save_used_topic(package["topic"])
 
         # ── Shorts ─────────────────────────────────────────────────────────────
-        _log("Generating and uploading Shorts (2 angles)...")
+        _log("Generating Shorts (2 angles)...")
         for angle, suffix in [("stat", "a"), ("mistake", "b")]:
             short_url, short_title = _upload_short(service, package, url, angle, suffix)
             if short_url:
@@ -236,7 +228,7 @@ def run_pipeline():
         sys.exit(1)
 
     finally:
-        _cleanup(heygen_path, pictory_path, video_path, thumb_path)
+        _cleanup(video_path, thumb_path)
 
 
 if __name__ == "__main__":

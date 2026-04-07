@@ -2,6 +2,7 @@
 content_generator.py
 SEO research + script generation.
 Style: Mark Tilbury — numbered lists, shocking hooks, specific dollar amounts.
+Scripts are kept to 2-3 minutes (~300-400 words) so they fit in one HeyGen chunk.
 """
 
 import os
@@ -75,10 +76,8 @@ Return JSON only:
 
 def generate_video_package(topic: str, niche: str) -> dict:
     """
-    Generates a full Mark Tilbury-style video package:
-    - Catchy numbered-list title
-    - 18-minute script broken into 8-10 scenes with hook
-    - Chapters, playlist, hashtags
+    Generates a full Mark Tilbury-style video package.
+    Script is 2-3 minutes total (~300-400 words) to fit in one HeyGen video.
     """
     prompt = f"""You are a YouTube scriptwriter copying Mark Tilbury's exact style.
 
@@ -86,14 +85,14 @@ Topic: {topic}
 Niche: {niche}
 
 Mark Tilbury's formula:
-- Title: Number + Specific Outcome (always include a $ amount or %) — e.g. "7 Ways to Make $1,000/Month", "5 Money Mistakes Costing You $10,000/Year", "The $500/Week Side Hustle Nobody Talks About"
-- Hook (scene 1): Open with a SHOCKING STAT or BOLD CLAIM in first 10 seconds. No intro, no greeting. Start mid-sentence with urgency.
+- Title: Number + Specific Outcome (always include a $ amount or %) — e.g. "7 Ways to Make $1,000/Month", "5 Money Mistakes Costing You $10,000/Year"
+- Hook (scene 1): Open with a SHOCKING STAT or BOLD CLAIM. No intro, no greeting. Start mid-sentence with urgency.
   Example: "Most people will never build wealth, and it's not because they don't work hard enough..."
-- Structure: numbered sections (e.g. "Number 1:", "Number 2:", etc.)
+- Structure: 3-4 numbered points (e.g. "Number 1:", "Number 2:", etc.)
 - Each point: specific, actionable, include real dollar amounts, percentages, timeframes
-- Tone: direct, conversational, no fluff, like talking to a friend who is a millionaire
-- Length: 8 scenes that together form ~18 minutes of content (~2 min per scene)
-- End with a strong CTA: "If this helped, subscribe — I post strategies like this every week"
+- Tone: direct, conversational, no fluff
+- IMPORTANT: Total script must be 300-400 words maximum (2-3 minutes when spoken). Keep it tight and punchy.
+- End with: "If this helped, subscribe — I post strategies like this every week"
 
 Return VALID JSON only, no markdown, no extra text:
 {{
@@ -101,25 +100,33 @@ Return VALID JSON only, no markdown, no extra text:
   "description": "...(150 words, includes 5 hashtags like #personalfinance #moneytips at end)",
   "scenes": [
     {{
-      "narration": "...(250-300 words, punchy, direct)",
+      "narration": "...(hook, 60-80 words, shocking opening stat or claim)",
+      "visuals": "...(b-roll suggestion)"
+    }},
+    {{
+      "narration": "...(points 1-2, 120-150 words total)",
+      "visuals": "...(b-roll suggestion)"
+    }},
+    {{
+      "narration": "...(points 3-4 + CTA, 120-150 words total)",
       "visuals": "...(b-roll suggestion)"
     }}
   ],
   "chapters": [
-    {{"time": "0:00", "title": "..."}},
-    {{"time": "2:00", "title": "..."}}
+    {{"time": "0:00", "title": "Hook"}},
+    {{"time": "0:30", "title": "..."}},
+    {{"time": "1:30", "title": "..."}}
   ],
-  "playlist": "...(pick most relevant playlist from: {config.PLAYLISTS})",
+  "playlist": "...(pick most relevant from: {config.PLAYLISTS})",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"]
 }}"""
 
     msg = _get_client().messages.create(
         model="claude-haiku-4-5",
-        max_tokens=4000,
+        max_tokens=2000,
         messages=[{"role": "user", "content": prompt}],
     )
     text = msg.content[0].text.strip()
-    # strip markdown code fences if present
     if text.startswith("```"):
         text = text.split("```")[1]
         if text.startswith("json"):
@@ -129,9 +136,9 @@ Return VALID JSON only, no markdown, no extra text:
     except Exception as e:
         print(f"[content] JSON parse error: {e}\nRaw: {text[:300]}")
         return {
-            "title": f"7 Ways to Build Wealth with {topic}",
+            "title": f"5 Ways to Build Wealth with {topic}",
             "description": f"In this video we break down {topic}. #personalfinance #moneytips #investing #wealth #finance",
-            "scenes": [{"narration": f"Today we are covering {topic}.", "visuals": "charts and graphs"}],
+            "scenes": [{"narration": f"Today we are covering {topic}. Here are 5 things you need to know right now.", "visuals": "charts and graphs"}],
             "chapters": [{"time": "0:00", "title": "Introduction"}],
             "playlist": config.PLAYLISTS[0],
             "tags": [niche, topic, "money", "finance", "investing"],
@@ -160,6 +167,7 @@ Rules:
 - Every sentence must add value — no filler
 - End with "Follow for more" or "Save this for later"
 - Include specific numbers/dollar amounts
+- Maximum 150 words
 
 Return JSON only:
 {{

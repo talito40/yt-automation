@@ -58,8 +58,8 @@ def _generate_scene_image(prompt: str, output_path: str) -> bool:
     payload = {
         "modelId":   PHOENIX_MODEL,
         "prompt":    visual_prompt,
-        "width":     1920,
-        "height":    1080,
+        "width":     1280,   # 1280x720 = 16:9, confirmed working in thumb_generator
+        "height":    720,
         "num_images": 1,
         "alchemy":   True,
     }
@@ -180,10 +180,16 @@ def generate_fallback_video(
             img_path = os.path.join(tmp_dir, f"slide_{i:02d}.jpg")
             ok = _generate_scene_image(prompt, img_path)
             if not ok:
-                # Use a solid color frame as fallback for this slide
                 _make_color_frame(title, img_path, i)
+            if not os.path.exists(img_path):
+                print(f"[fallback] Slide {i+1} image missing — skipping")
+                continue
             image_paths.append(img_path)
             print(f"[fallback] Slide {i+1}/{len(visual_prompts)} ready")
+
+        if not image_paths:
+            print("[fallback] No slides generated — cannot create video")
+            return ""
 
         # 3. Build video with ffmpeg
         print("[fallback] Stitching video with ffmpeg...")
@@ -211,19 +217,19 @@ def generate_fallback_video(
 
 
 def _make_color_frame(title: str, output_path: str, index: int) -> None:
-    """Create a simple colored frame using ffmpeg when Leonardo fails."""
-    colors = ["#0c1c48", "#08091e", "#1a0a2e"]
+    """Create a solid colored frame using ffmpeg when Leonardo fails.
+    No text overlay — avoids ffmpeg drawtext escaping issues with $, %, etc."""
+    colors = ["0c1c48", "08091e", "1a0a2e"]
     color = colors[index % len(colors)]
-    safe_title = title.replace("'", "").replace('"', "")[:60]
-    subprocess.run([
+    result = subprocess.run([
         "ffmpeg", "-y",
         "-f", "lavfi",
-        "-i", f"color={color}:size=1920x1080:duration=1",
+        "-i", f"color=0x{color}:size=1280x720:duration=1",
         "-vframes", "1",
-        "-vf", f"drawtext=text='{safe_title}':fontcolor=white:fontsize=60:"
-               f"x=(w-text_w)/2:y=(h-text_h)/2",
         output_path,
     ], capture_output=True, timeout=15)
+    if result.returncode != 0:
+        print(f"[fallback] Color frame error: {result.stderr[-200:]}")
 
 
 def _stitch_slideshow(

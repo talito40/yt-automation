@@ -10,6 +10,14 @@ Two channels are operated in parallel:
 
 ---
 
+## Repository
+
+- **GitHub**: https://github.com/talito40/yt-automation (branch: `master`)
+- **Local**: `C:\Users\TVARKEL\Documents\claude-stuff\project5\`
+- **Secrets excluded from git**: `.env`, `client_secrets.json`, `youtube_token_ch*.json`, `for-yt-automation/`
+
+---
+
 ## Infrastructure
 
 | Component | Details |

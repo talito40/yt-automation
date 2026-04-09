@@ -1,0 +1,21 @@
+name: Delete All Videos
+
+on:
+  workflow_dispatch:
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and run delete script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          password: ${{ secrets.DROPLET_PASSWORD }}
+          script: |
+            cd /opt/yt-automation
+            git fetch origin main
+            git reset --hard origin/main
+            source venv/bin/activate
+            python delete_all_videos.py

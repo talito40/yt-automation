@@ -21,6 +21,10 @@ MAX_CHARS_PER_CHUNK = 3000   # safe limit per HeyGen video (API limit ~3500)
 POLL_INTERVAL       = 15     # seconds between status checks
 MAX_POLL_ATTEMPTS   = 160    # 160 * 15s = 40 minutes max wait per chunk
 
+# Set by _generate_single() when HeyGen rejects due to insufficient credits.
+# main.py reads this to send a targeted Telegram alert even when fallback succeeds.
+LAST_FAILURE_REASON = ""
+
 
 def _build_full_script(script: str, scenes: list) -> str:
     """Return the best available script text."""
@@ -181,6 +185,9 @@ def _generate_single(script_text: str, output_path: str) -> bool:
         elif status in ("failed", "error"):
             err = sdata.get("error") or sdata.get("message", "unknown")
             print(f"[avatar_generator] HeyGen generation failed: {err}")
+            if "MOVIO_PAYMENT_INSUFFICIENT_CREDIT" in str(err):
+                global LAST_FAILURE_REASON
+                LAST_FAILURE_REASON = "INSUFFICIENT_CREDIT"
             return False
 
     print(f"[avatar_generator] Timed out waiting for video_id={video_id}")
@@ -239,7 +246,7 @@ def generate_intro_clip(
     photo_path is accepted for API compatibility but ignored (using stock avatars).
     """
     if not HEYGEN_API_KEY:
-        print("[avatar_generator] No HEYGEN_API_KEY — skipping")
+        print("[avatar_generator] No HEYGEN_API_KEY â€” skipping")
         return ""
 
     if scenes is None:
@@ -264,7 +271,7 @@ def generate_intro_clip(
             print(f"[avatar_generator] Generating chunk {i+1}/{len(chunks)} ({len(chunk)} chars)...")
             ok = _generate_single(chunk, chunk_path)
             if not ok:
-                print(f"[avatar_generator] Chunk {i+1} failed — aborting")
+                print(f"[avatar_generator] Chunk {i+1} failed â€” aborting")
                 return ""
             chunk_paths.append(chunk_path)
 

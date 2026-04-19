@@ -269,6 +269,68 @@ def _overlay_audio(video_path: str, audio_path: str, output_path: str) -> bool:
         return False
 
 
+# ── Presenter PIP overlay ─────────────────────────────────────────────────────
+
+def _add_presenter_pip(video_path: str, presenter_path: str, output_path: str) -> bool:
+    """
+    Overlay presenter photo as a circular picture-in-picture in the
+    bottom-right corner of the video throughout its full duration.
+
+    Layout: 220×220 px circle, 20 px from bottom-right edge, with a
+    thin dark border ring so the presenter stands out on any background.
+    """
+    size   = 220   # circle diameter in pixels
+    margin = 20    # gap from edge
+    border = 6     # dark border ring thickness
+    r      = size // 2
+    rb     = r + border   # outer radius including border
+
+    # The filter chain:
+    #  1. Scale presenter to (size)×(size)
+    #  2. Apply circular alpha mask via geq
+    #  3. Add a dark border ring slightly larger, overlay presenter on top
+    #  4. Composite onto main video at bottom-right
+    filter_complex = (
+        # Scale presenter square
+        f"[1:v]scale={size}:{size},format=yuva420p,"
+        # Circular alpha mask
+        f"geq=lum='p(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)'"
+        f":a='255*lte(sqrt(pow(X-{r},2)+pow(Y-{r},2)),{r})'[pip_circ];"
+        # Dark border: solid dark circle slightly bigger
+        f"color=0x111111:size={size+border*2}x{size+border*2}:duration=1,"
+        f"loop=loop=-1:size=1,format=yuva420p,"
+        f"geq=lum='p(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)'"
+        f":a='255*lte(sqrt(pow(X-{rb},2)+pow(Y-{rb},2)),{rb})'[border_circ];"
+        # Overlay presenter on border ring
+        f"[border_circ][pip_circ]overlay={border}:{border}:format=auto[pip_framed];"
+        # Overlay framed presenter on main video, bottom-right corner
+        f"[0:v][pip_framed]overlay="
+        f"W-{size+border*2+margin}:H-{size+border*2+margin}"
+        f":format=auto:shortest=1[out]"
+    )
+
+    try:
+        result = subprocess.run([
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-loop", "1", "-i", presenter_path,
+            "-filter_complex", filter_complex,
+            "-map", "[out]",
+            "-map", "0:a",
+            "-c:v", "libx264", "-preset", "veryfast",
+            "-c:a", "copy",
+            "-pix_fmt", "yuv420p",
+            output_path,
+        ], capture_output=True, text=True, timeout=600)
+        if result.returncode == 0:
+            return True
+        print(f"[stock_fallback] PIP error: {result.stderr[-500:]}")
+        return False
+    except Exception as e:
+        print(f"[stock_fallback] PIP exception: {e}")
+        return False
+
+
 # ── Public entry point ─────────────────────────────────────────────────────────
 
 def generate_stock_video(
@@ -336,8 +398,26 @@ def generate_stock_video(
 
         # 5. Overlay narration
         print("[stock_fallback] Overlaying narration audio...")
-        ok = _overlay_audio(concat_path, audio_path, output_path)
-        if ok and os.path.exists(output_path):
+        narrated_path = os.path.join(tmp_dir, "narrated.mp4")
+        ok = _overlay_audio(concat_path, audio_path, narrated_path)
+        if not ok:
+            return ""
+
+        # 6. Add presenter picture-in-picture (circular, bottom-right corner)
+        presenter_path = os.path.join("/opt/yt-automation", f"presenter_ch{config.CHANNEL}.jpg")
+        if os.path.exists(presenter_path):
+            print("[stock_fallback] Adding presenter PIP...")
+            ok = _add_presenter_pip(narrated_path, presenter_path, output_path)
+            if not ok:
+                print("[stock_fallback] PIP failed — using video without presenter")
+                import shutil
+                shutil.copy2(narrated_path, output_path)
+        else:
+            print(f"[stock_fallback] No presenter photo found at {presenter_path} — skipping PIP")
+            import shutil
+            shutil.copy2(narrated_path, output_path)
+
+        if os.path.exists(output_path):
             size_mb = os.path.getsize(output_path) // 1_048_576
             print(f"[stock_fallback] Stock video ready: {output_path} ({size_mb} MB)")
             return output_path

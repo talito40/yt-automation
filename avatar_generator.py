@@ -88,17 +88,27 @@ def _generate_single(script_text: str, output_path: str) -> bool:
     Submit one HeyGen video job and download result to output_path.
     Returns True on success, False on failure.
     """
-    avatar_id = config.HEYGEN_AVATAR_ID
-    voice_id  = config.HEYGEN_VOICE_ID
+    avatar_id   = config.HEYGEN_AVATAR_ID
+    voice_id    = config.HEYGEN_VOICE_ID
+    avatar_type = getattr(config, "HEYGEN_AVATAR_TYPE", "avatar")
+
+    # Build character block — photo avatars use a different key/type
+    if avatar_type == "talking_photo":
+        character = {
+            "type": "talking_photo",
+            "talking_photo_id": avatar_id,
+        }
+    else:
+        character = {
+            "type": "avatar",
+            "avatar_id": avatar_id,
+            "avatar_style": "normal",
+        }
 
     payload = {
         "video_inputs": [
             {
-                "character": {
-                    "type": "avatar",
-                    "avatar_id": avatar_id,
-                    "avatar_style": "normal",
-                },
+                "character": character,
                 "voice": {
                     "type": "text",
                     "input_text": script_text,
